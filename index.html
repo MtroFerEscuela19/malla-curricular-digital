@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Malla Curricular de Alfabetización Digital</title>
+    <!-- Chosen Palette: Azure Serenity (Fondo blanco puro, con acentos en azules vibrantes y grises suaves para el texto) -->
+    <!-- Application Structure Plan: Se ha diseñado una aplicación de página única con una navegación principal por "Tramos". Al seleccionar un tramo, el contenido principal se actualiza dinámicamente, presentando las tres áreas de competencia (Uso de Dispositivos, Resolución de Problemas, Creación de Contenidos) en un formato de pestañas. Esta estructura permite al usuario enfocarse en un nivel de aprendizaje específico sin sentirse abrumado y comparar fácilmente las áreas dentro de ese nivel. Un gráfico de radar dinámico acompaña la navegación, ofreciendo una representación visual inmediata del progreso y la complejidad creciente a través de los tramos. Se eligió esta arquitectura para transformar un documento lineal en una experiencia de exploración no lineal, centrada en el usuario y que facilita la comprensión rápida de la progresión curricular. -->
+    <!-- Visualization & Content Choices: 
+         - Informe: Malla curricular (texto descriptivo). Meta: Mostrar la progresión de habilidades.
+         - Visualización: Gráfico de Radar (Chart.js/Canvas). Interacción: El gráfico se actualiza al hacer clic en los botones de navegación de cada "Tramo". Justificación: Un gráfico de radar es ideal para mostrar el crecimiento multidimensional en las tres áreas de competencia de forma simultánea. Proporciona una "foto" clara de la complejidad esperada en cada etapa, convirtiendo el texto abstracto en una visualización comparativa e impactante.
+         - Presentación de Contenido: Tarjetas con pestañas interactivas (HTML/CSS/JS). Interacción: Los usuarios hacen clic en las pestañas para cambiar entre las áreas de competencia dentro de un "Tramo". Justificación: Las pestañas organizan una gran cantidad de texto de manera eficiente, evitando el desplazamiento excesivo y permitiendo al usuario explorar el contenido a su propio ritmo. Este método mejora la legibilidad y la retención.
+         - Nueva Característica LLM: Explicador de Habilidades ✨. Meta: Proporcionar explicaciones detalladas y contextualizadas de cada habilidad. Visualización: Modal emergente (HTML/CSS/JS) con texto generado por LLM. Interacción: El usuario hace clic en un botón "Explicar ✨" junto a cada habilidad para invocar al LLM. Justificación: Añade una capa interactiva de aprendizaje profundo, permitiendo a los usuarios obtener aclaraciones instantáneas sobre cualquier punto del currículo, mejorando la comprensión y el compromiso con el contenido.
+         - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .nav-button.active {
+            background-color: #1e40af; /* blue-800 */
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .tab-button.active {
+            border-color: #1e40af; /* blue-800 */
+            background-color: #eff6ff; /* blue-50 */
+            color: #1e40af; /* blue-800 */
+        }
+        .content-card ul {
+            list-style-position: inside;
+        }
+         .content-card ul li::marker {
+            color: #3b82f6; /* blue-500 */
+            font-size: 1.2em;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            max-width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            position: relative;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.open .modal-content {
+            transform: translateY(0);
+        }
+        .close-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #475569;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6; /* blue-500 */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold text-blue-800 mb-2">Malla Curricular de Alfabetización Digital</h1>
+            <p class="text-lg text-gray-600 max-w-3xl mx-auto">Una guía interactiva para explorar las etapas del aprendizaje digital. Navega por los tramos para ver las competencias clave y su evolución.</p>
+        </header>
+
+        <nav id="tramo-nav" class="flex flex-wrap justify-center gap-3 md:gap-4 mb-10">
+            <!-- Navigation buttons will be inserted here by JS -->
+        </nav>
+
+        <main class="grid grid-cols-1 lg:grid-cols-5 gap-8 md:gap-12 items-start">
+            
+            <section id="content-display" class="lg:col-span-3 bg-blue-50/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg">
+                <!-- Content will be dynamically loaded here -->
+            </section>
+
+            <aside class="lg:col-span-2 p-6 bg-blue-50/80 backdrop-blur-sm rounded-2xl shadow-lg sticky top-8">
+                <h2 class="text-2xl font-bold text-blue-800 text-center mb-4">Progreso de Habilidades por Tramo</h2>
+                <div class="chart-container">
+                    <canvas id="skillsChart"></canvas>
+                </div>
+                 <p class="text-sm text-gray-600 mt-4 text-center">Este gráfico muestra el nivel de profundidad esperado para cada área de competencia en el tramo seleccionado. Observa cómo las habilidades se expanden de manera equilibrada.</p>
+            </aside>
+
+        </main>
+        
+        <footer class="text-center mt-12 pt-8 border-t border-blue-200">
+            <p class="text-gray-600">Diseño interactivo basado en la "Malla Curricular de Alfabetización Digital".</p>
+        </footer>
+
+    </div>
+
+    <!-- Skill Explanation Modal -->
+    <div id="skillModal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="close-button" onclick="document.getElementById('skillModal').classList.remove('open')">&times;</button>
+            <h3 id="modalSkillTitle" class="text-2xl font-bold text-blue-800 mb-4"></h3>
+            <div id="modalSkillExplanation" class="text-gray-700 leading-relaxed">
+                <div class="loading-spinner"></div>
+                <p class="text-center text-gray-500 mt-4">Generando explicación...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            
+            const curriculumData = {
+                tramo1: {
+                    title: 'Tramo 1: Primeros Pasos Digitales',
+                    description: 'En esta etapa inicial, los aprendices se familiarizan con los conceptos más básicos de los dispositivos y comienzan a explorar la creación y la resolución de problemas de forma guiada.',
+                    areas: {
+                        'Uso de Dispositivos': [
+                            'Reconocer partes básicas del dispositivo (pantalla, teclado).',
+                            'Practicar el encendido y apagado correcto.',
+                            'Manejar interacciones básicas: arrastrar, soltar, pulsar (clic).',
+                            'Utilizar gestos simples en pantallas táctiles.',
+                            'Ejecutar comandos sencillos en apps educativas.'
+                        ],
+                        'Resolución de Problemas': [
+                            'Seguir instrucciones simples de uno o dos pasos en juegos.',
+                            'Descubrir funcionalidades mediante la experimentación guiada.',
+                            'Desarrollar la escucha activa y la observación de indicaciones.'
+                        ],
+                        'Creación de Contenidos': [
+                            'Usar aplicaciones de dibujo para colorear y trazar.',
+                            'Crear formas y patrones básicos con herramientas digitales.',
+                            'Realizar las primeras grabaciones de voz con supervisión.'
+                        ]
+                    }
+                },
+                tramo2: {
+                    title: 'Tramo 2: Explorando y Creando',
+                    description: 'Los aprendices avanzan en el manejo de herramientas, comienzan a organizar su trabajo digital y expanden sus capacidades creativas con proyectos más estructurados.',
+                    areas: {
+                        'Uso de Dispositivos': [
+                            'Identificar letras y números para escribir palabras sencillas.',
+                            'Moverse entre pantallas y menús de aplicaciones.',
+                            'Comprender el concepto de "guardar" el trabajo.',
+                            'Familiarizarse con el uso de la webcam y el micrófono.'
+                        ],
+                        'Resolución de Problemas': [
+                            'Identificar patrones y secuencias lógicas en juegos.',
+                            'Resolver pequeños desafíos mediante prueba y error estructurado.',
+                            'Reconocer y comprender mensajes de error simples.'
+                        ],
+                        'Creación de Contenidos': [
+                            'Utilizar herramientas de pintura digital más avanzadas y capas sencillas.',
+                            'Diseñar afiches o presentaciones simples con imágenes y texto.',
+                            'Armar secuencias narrativas combinando imágenes y subtítulos.',
+                            'Grabar y reproducir mensajes de audio con mayor autonomía.'
+                        ]
+                    }
+                },
+                tramo3: {
+                    title: 'Tramo 3: Conectando y Organizando',
+                    description: 'Esta etapa introduce la navegación web segura, la gestión de información y el pensamiento computacional a través de herramientas de programación visual.',
+                    areas: {
+                        'Uso de Dispositivos': [
+                            'Navegar la web de forma básica y segura (reconocer HTTPS).',
+                            'Gestionar archivos y carpetas: crear, renombrar, mover.',
+                            'Usar procesadores de texto para escribir y dar formato.',
+                            'Manejar el correo electrónico con supervisión (enviar, recibir, adjuntar).'
+                        ],
+                        'Resolución de Problemas': [
+                            'Utilizar programación por bloques (Scratch Jr., Code.org).',
+                            'Identificar y corregir errores simples en programas de bloques (depuración).',
+                            'Planificar los pasos necesarios para un proyecto digital sencillo.'
+                        ],
+                        'Creación de Contenidos': [
+                            'Crear presentaciones multimedia combinando texto, imágenes y audio.',
+                            'Realizar edición de fotos elemental: recortar, rotar, ajustar.',
+                            'Diseñar cómics digitales usando plantillas.',
+                            'Crear borradores de libros y revistas digitales.'
+                        ]
+                    }
+                },
+                tramo4: {
+                    title: 'Tramo 4: Profundizando y Colaborando',
+                    description: 'En la fase más avanzada, los aprendices utilizan herramientas colaborativas, aplican lógica de programación compleja y crean proyectos multimedia sofisticados.',
+                    areas: {
+                        'Uso de Dispositivos': [
+                            'Realizar búsquedas avanzadas en la web con filtros y operadores.',
+                            'Entender conceptos de redes (Wifi, LAN, Internet vs. Intranet).',
+                            'Usar herramientas colaborativas en línea (documentos compartidos).',
+                            'Configurar ajustes básicos de privacidad en aplicaciones.'
+                        ],
+                        'Resolución de Problemas': [
+                            'Construir algoritmos con variables, bucles y condicionales en bloques.',
+                            'Descomponer problemas complejos en partes más pequeñas.',
+                            'Aplicar estrategias sistemáticas para encontrar y solucionar errores.',
+                            'Buscar y utilizar tutoriales en línea para aprender nuevas habilidades.'
+                        ],
+                        'Creación de Contenidos': [
+                            'Diseñar videojuegos simples con reglas e interacciones.',
+                            'Editar videos: recortar, añadir música, transiciones y títulos.',
+                            'Producir podcasts o audionovelas, editando y secuenciando audio.',
+                            'Introducirse a la programación basada en texto (ej. Python).'
+                        ]
+                    }
+                }
+            };
+            
+            const chartData = {
+                labels: ['Uso de Dispositivos', 'Resolución de Problemas', 'Creación de Contenidos'],
+                datasets: [
+                    {
+                        label: 'Tramo 1',
+                        data: [1, 1, 1],
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)', /* blue-500 */
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                    },
+                     {
+                        label: 'Tramo 2',
+                        data: [2, 2, 2],
+                        backgroundColor: 'rgba(37, 99, 235, 0.2)', /* blue-600 */
+                        borderColor: 'rgba(37, 99, 235, 1)',
+                         pointBackgroundColor: 'rgba(37, 99, 235, 1)',
+                    },
+                     {
+                        label: 'Tramo 3',
+                        data: [3, 3, 3],
+                        backgroundColor: 'rgba(29, 78, 216, 0.2)', /* blue-700 */
+                        borderColor: 'rgba(29, 78, 216, 1)',
+                        pointBackgroundColor: 'rgba(29, 78, 216, 1)',
+                    },
+                     {
+                        label: 'Tramo 4',
+                        data: [4, 4, 4],
+                        backgroundColor: 'rgba(30, 58, 138, 0.2)', /* blue-800 */
+                        borderColor: 'rgba(30, 58, 138, 1)',
+                        pointBackgroundColor: 'rgba(30, 58, 138, 1)',
+                    }
+                ]
+            };
+
+            const navContainer = document.getElementById('tramo-nav');
+            const contentDisplay = document.getElementById('content-display');
+            const ctx = document.getElementById('skillsChart').getContext('2d');
+            const skillModal = document.getElementById('skillModal');
+            const modalSkillTitle = document.getElementById('modalSkillTitle');
+            const modalSkillExplanation = document.getElementById('modalSkillExplanation');
+            let activeTramo = 'tramo1';
+            let activeTab = 'Uso de Dispositivos';
+            
+            const skillsChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [] 
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                            grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                            pointLabels: {
+                                font: { size: 12 },
+                                color: '#475569' /* gray-600 */
+                            },
+                            ticks: {
+                                beginAtZero: true,
+                                max: 4,
+                                stepSize: 1,
+                                backdropColor: 'transparent',
+                                color: '#64748b' /* gray-500 */
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            async function explainSkill(skillText, tramoTitle, areaName) {
+                skillModal.classList.add('open');
+                modalSkillTitle.textContent = skillText;
+                modalSkillExplanation.innerHTML = '<div class="loading-spinner"></div><p class="text-center text-gray-500 mt-4">Generando explicación...</p>';
+
+                try {
+                    let chatHistory = [];
+                    const prompt = `Explica en detalle el siguiente concepto de alfabetización digital para un aprendiz, incluyendo ejemplos prácticos y por qué es importante: '${skillText}' del área de '${areaName}' en el '${tramoTitle}'.`;
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = AIzaSyC6oI37D3Bi-iyENzwKUhLFtkVFifIWtK8
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        modalSkillExplanation.innerHTML = `<p>${text.replace(/\n/g, '<br>')}</p>`;
+                    } else {
+                        modalSkillExplanation.innerHTML = '<p class="text-red-500">No se pudo generar la explicación. Inténtalo de nuevo.</p>';
+                    }
+                } catch (error) {
+                    console.error('Error al llamar a la API de Gemini:', error);
+                    modalSkillExplanation.innerHTML = '<p class="text-red-500">Ocurrió un error al cargar la explicación. Por favor, verifica tu conexión.</p>';
+                }
+            }
+
+            function updateContent() {
+                const tramo = curriculumData[activeTramo];
+                const area = tramo.areas[activeTab];
+
+                let tabButtonsHtml = Object.keys(tramo.areas).map(areaKey => `
+                    <button data-tab="${areaKey}" class="tab-button flex-grow text-sm md:text-base whitespace-nowrap px-4 py-2 font-semibold border-b-2 transition-colors duration-200 ${areaKey === activeTab ? 'active' : 'border-transparent text-gray-500 hover:bg-blue-50'}">
+                        ${areaKey}
+                    </button>
+                `).join('');
+
+                let contentHtml = `
+                    <h2 class="text-3xl font-bold text-blue-800 mb-2">${tramo.title}</h2>
+                    <p class="text-gray-700 mb-6">${tramo.description}</p>
+                    <div class="flex border-b border-blue-200 mb-4">${tabButtonsHtml}</div>
+                    <div class="content-card bg-blue-50 p-5 rounded-lg">
+                        <ul class="space-y-3 text-gray-800">
+                            ${area.map(item => `
+                                <li class="flex items-center justify-between group">
+                                    <span class="flex-grow">${item}</span>
+                                    <button class="explain-skill-button ml-2 px-3 py-1 bg-blue-600 text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                            data-skill="${item}"
+                                            data-tramotitle="${tramo.title}"
+                                            data-areaname="${activeTab}">
+                                        Explicar ✨
+                                    </button>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `;
+                contentDisplay.innerHTML = contentHtml;
+                addTabListeners();
+                addSkillExplanationListeners();
+            }
+
+            function updateChart() {
+                const datasetIndex = parseInt(activeTramo.replace('tramo', '')) - 1;
+                skillsChart.data.datasets = [chartData.datasets[datasetIndex]];
+                skillsChart.update();
+            }
+            
+            function handleNavClick(e) {
+                if (e.target.tagName === 'BUTTON') {
+                    activeTramo = e.target.dataset.tramo;
+                    activeTab = 'Uso de Dispositivos';
+                    updateNavButtons();
+                    updateContent();
+                    updateChart();
+                }
+            }
+
+            function handleTabClick(e) {
+                if (e.target.tagName === 'BUTTON') {
+                    activeTab = e.target.dataset.tab;
+                    updateContent();
+                }
+            }
+            
+            function addTabListeners() {
+                contentDisplay.querySelector('.flex').addEventListener('click', handleTabClick);
+            }
+
+            function addSkillExplanationListeners() {
+                contentDisplay.querySelectorAll('.explain-skill-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const skillText = e.target.dataset.skill;
+                        const tramoTitle = e.target.dataset.tramotitle;
+                        const areaName = e.target.dataset.areaname;
+                        explainSkill(skillText, tramoTitle, areaName);
+                    });
+                });
+            }
+
+            function updateNavButtons() {
+                navContainer.querySelectorAll('.nav-button').forEach(btn => {
+                    if (btn.dataset.tramo === activeTramo) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            }
+
+            function initialize() {
+                Object.keys(curriculumData).forEach((key, index) => {
+                    const button = document.createElement('button');
+                    button.dataset.tramo = key;
+                    button.textContent = `Tramo ${index + 1}`;
+                    button.className = 'nav-button px-4 py-2 md:px-6 md:py-3 rounded-full font-semibold text-gray-600 bg-white shadow-sm hover:bg-blue-100 transition-all duration-200';
+                    navContainer.appendChild(button);
+                });
+
+                navContainer.addEventListener('click', handleNavClick);
+                
+                updateNavButtons();
+                updateContent();
+                updateChart();
+            }
+
+            initialize();
+        });
+    </script>
+</body>
+</html>
